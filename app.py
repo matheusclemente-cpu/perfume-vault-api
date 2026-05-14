@@ -260,3 +260,15 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"\n🫧  Perfume Vault Backend v3  →  http://0.0.0.0:{port}\n")
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
+
+
+@app.route("/app")
+@app.route("/app/")
+def serve_app():
+    """Serve the frontend HTML app"""
+    import os
+    html_path = os.path.join(os.path.dirname(__file__), "index.html")
+    if os.path.exists(html_path):
+        with open(html_path, "r") as f:
+            return f.read(), 200, {"Content-Type": "text/html"}
+    return "App not found", 404
