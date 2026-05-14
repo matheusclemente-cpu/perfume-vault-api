@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<meta name="theme-color" content="#080808"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+<title>Perfume Vault</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#080808;color:#F0E6C8;font-family:Georgia,'Times New Roman',serif;min-height:100vh;max-width:430px;margin:0 auto;-webkit-tap-highlight-color:transparent}
+button,input{font-family:Georgia,serif}
+input::placeholder{color:#3a3a3a}
+input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;background:#222;outline:none;width:100%}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:currentColor;cursor:pointer;margin-top:-8px}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#222;border-radius:2px}
+@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+.tab{flex:1;background:none;border:none;padding:11px 2px;color:#444;font-size:9px;letter-spacing:.08em;text-transform:uppercase;border-bottom:2px solid transparent;cursor:pointer;font-family:Georgia,serif}
+.tab.on{color:#D4A843;border-bottom-color:#D4A843}
+.gold{background:linear-gradient(135deg,#D4A843,#8B6914);border:none;border-radius:10px;color:#000;padding:11px 16px;cursor:pointer;font-size:13px;font-weight:700}
+.ghost{background:none;border:1px solid #2a2a2a;border-radius:10px;color:#666;padding:11px 16px;cursor:pointer;font-size:13px}
+.inp{background:#0d0d0d;border:1px solid #252525;border-radius:10px;color:#F0E6C8;padding:11px 14px;font-size:13px;outline:none;width:100%}
+.card{background:#101010;border-radius:16px;margin-bottom:10px;overflow:hidden;border:1px solid #1e1e1e}
+.lbl{font-size:9px;color:#444;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:300;display:flex;align-items:flex-end}
+.dr{background:#0b0b0b;border-top:2px solid var(--c,#D4A843);border-radius:20px 20px 0 0;width:100%;max-height:92vh;overflow-y:auto;padding:14px 16px 44px}
+.hnd{width:36px;height:4px;background:#2a2a2a;border-radius:2px;margin:0 auto 16px}
+.chip{display:inline-flex;align-items:center;gap:4px;background:#181818;border:1px solid #2a2a2a;border-radius:20px;padding:4px 11px;font-size:12px;color:#ccc;margin:2px 3px 2px 0}
+.chip.sm{padding:3px 8px;font-size:10px}
+.bdg{display:inline-flex;align-items:center;gap:5px;background:#141414;border:1px solid #252525;border-radius:8px;padding:4px 10px;font-size:11px;color:#aaa;margin:2px 3px 2px 0}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:400;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
+.mbox{background:#0e0e0e;border:1px solid #D4A84333;border-radius:20px;padding:24px;width:100%;max-width:360px}
+.errbar{margin:10px 14px 0;padding:10px 12px;background:#180505;border:1px solid #4a1515;border-radius:10px;font-size:11px;color:#e06060}
+.dots{display:inline-flex;gap:3px;align-items:center}
+.dots i{width:5px;height:5px;border-radius:50%;background:#D4A843;display:inline-block;animation:pulse 1.2s ease-in-out infinite;font-style:normal}
+</style>
+</head>
+<body>
+<div id="R"></div>
+<script>
+// ── Constants ────────────────────────────────────────────────────────────────
+const API="https://api.anthropic.com/v1/messages";
+const BE_KEY="pv_be";
+const DEF_BE="https://perfume-vault-api.onrender.com";
+const TABS=["Coleção","Wishlist","Perfil","Descobrir"];
+
+const AC={
+  "cítrico":"#F9A825","citrico":"#F9A825","fresco especiado":"#4CAF50",
+  "atalcado":"#CE93D8","empudrado":"#CE93D8","amadeirado":"#8B6914",
+  "floral":"#E91E63","oriental":"#7B1FA2","aquático":"#0277BD","aquatico":"#0277BD",
+  "gourmand":"#BF360C","couro":"#795548","aromático":"#00695C","aromatico":"#00695C",
+  "almíscarado":"#9E9E9E","almiscarado":"#9E9E9E","verde":"#66BB6A",
+  "especiado":"#FF7043","frutal":"#F06292","patchouli":"#4A148C",
+  "âmbar":"#FF8F00","ambar":"#FF8F00","herbáceo":"#AED581","herbaceo":"#AED581",
+  "resinoso":"#5D4037","fresco":"#00BCD4","defumado":"#546E7A","woody":"#8B6914",
+};
+function aC(n){
+  if(!n)return"#888";
+  const l=n.toLowerCase();
+  for(const[k,c]of Object.entries(AC))if(l.includes(k))return c;
+  const h=[...n].reduce((a,c)=>a+c.charCodeAt(0),0);
+  return`hsl(${(h*47)%360},52%,45%)`;
+}
+const NE={
+  bergamota:"🍋",bergamot:"🍋",toranja:"🍊",grapefruit:"🍊",limão:"🍋",lemon:"🍋",
+  laranja:"🍊",orange:"🍊",maçã:"🍎",apple:"🍎",pêra:"🍐",pear:"🍐",
+  pêssego:"🍑",peach:"🍑",framboesa:"🫐",raspberry:"🫐",morango:"🍓",
+  baunilha:"🍦",vanilla:"🍦","almíscar":"🌫️",almiscar:"🌫️",musk:"🌫️",
+  sândalo:"🪵",sandalwood:"🪵",cedro:"🌲",cedar:"🌲",vetiver:"🌿",
+  patchouli:"🍂",rosa:"🌹",rose:"🌹",jasmim:"🌸",jasmine:"🌸",
+  "raiz de orris":"💜",orris:"💜",íris:"💜",iris:"💜",
+  âmbar:"✨",amber:"✨",ambar:"✨",gengibre:"🫚",ginger:"🫚",
+  pimenta:"🌶️",pepper:"🌶️",canela:"🌰",cinnamon:"🌰",
+  magnólia:"🌺",magnolia:"🌺","notas herbais":"🌿","notas atalcadas":"🪞",
+  incenso:"🕯️",incense:"🕯️",café:"☕",coffee:"☕",tonka:"☕",madeira:"🪵",
+  cedro:"🌲",almíscar:"🌫️",
+};
+function nE(n){const l=(n||"").toLowerCase();for(const[k,v]of Object.entries(NE))if(l.includes(k))return v;return"🌿";}
+const SI={Primavera:"🌸",Verão:"☀️",Outono:"🍂",Inverno:"❄️",
+  Spring:"🌸",Summer:"☀️",Fall:"🍂",Winter:"❄️",
+  Dia:"☀️",Noite:"🌙",Day:"☀️",Night:"🌙",Manhã:"🌅",Tarde:"🌞"};
+
+// ── State ────────────────────────────────────────────────────────────────────
+let S={
+  tab:0,col:[],wish:[],stores:{},matches:{},
+  profile:null,disc:[],preview:null,
+  beOk:null,lSearch:false,lProfile:false,lDisc:false,lPriceId:null,
+  err:"",showCfg:false,showLogin:false,user:null,
+};
+function set(p){Object.assign(S,p);render();}
+
+// ── Persist ──────────────────────────────────────────────────────────────────
+function save(){
+  try{localStorage.setItem("pv_col",JSON.stringify(S.col));}catch{}
+  try{localStorage.setItem("pv_wish",JSON.stringify(S.wish));}catch{}
+  try{localStorage.setItem("pv_stores",JSON.stringify(S.stores));}catch{}
+}
+function load(){
+  try{S.col=JSON.parse(localStorage.getItem("pv_col")||"[]");}catch{}
+  try{S.wish=JSON.parse(localStorage.getItem("pv_wish")||"[]");}catch{}
+  try{S.stores=JSON.parse(localStorage.getItem("pv_stores")||"{}");}catch{}
+  try{const u=localStorage.getItem("pv_user");if(u)S.user=JSON.parse(u);}catch{}
+}
+
+// ── Backend ──────────────────────────────────────────────────────────────────
+function getBE(){return(localStorage.getItem(BE_KEY)||DEF_BE).replace(/\/$/,"");}
+function setBE(u){localStorage.setItem(BE_KEY,u.trim());}
+async function beHealth(){
+  try{await fetch(getBE()+"/api/health",{signal:AbortSignal.timeout(8000),mode:"no-cors"});return true;}
+  catch{return false;}
+}
+async function bePost(ep,body){
+  const r=await fetch(getBE()+ep,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body),signal:AbortSignal.timeout(60000)});
+  const d=await r.json();
+  if(d.erro)throw new Error(d.erro);
+  return d;
+}
+
+// ── Claude ───────────────────────────────────────────────────────────────────
+async function llm(msgs,sys,tok=1500){
+  const r=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:tok,system:sys,messages:msgs})});
+  const d=await r.json();
+  return(d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+}
+
+const PSYS=`Especialista em perfumaria. Retorne APENAS JSON válido sem markdown:
+{"nome":"string","marca":"string","ano":number,"perfumista":"string","familia":"string",
+"genero":"Masculino|Feminino|Unissex","concentracao":"EDP|EDT|Parfum|EDC|Extrait",
+"notas_topo":[{"nome":"string","peso":8}],
+"notas_coracao":[{"nome":"string","peso":7}],
+"notas_fundo":[{"nome":"string","peso":6}],
+"acordes":[{"nome":"string","porcentagem":number}],
+"descricao":"string","longevidade":"Fraca|Moderada|Boa|Excelente",
+"projecao":"Íntima|Moderada|Forte|Bestial",
+"fragrantica_nota":number,"votos_comunidade":number,
+"estacoes":["string"],"horarios":["string"],"ocasioes":["string"],
+"preco_usd":number,"imagem_frasco":""}`;
+
+// Reads multiple Fragrantica screenshots and extracts ALL data
+const SSYS=`Você é um especialista em análise de imagens do Fragrantica.
+O usuário enviou prints de tela do Fragrantica de um perfume.
+Extraia TODOS os dados visíveis nas imagens:
+- Nome e marca do perfume (título da página)
+- Imagem do frasco (descreva brevemente)
+- Acordes principais e proporção aproximada das barras (a barra mais longa = ~100%)
+- Notas de topo, coração e fundo (com seus nomes e fotos vistas)
+- Avaliação (nota X de 5, número de votos)
+- Quando usar: estações e horários com votos
+- Texto descritivo sobre o perfume
+- Perfumista se visível
+- Ano de lançamento se visível
+Retorne APENAS JSON válido sem markdown com a mesma estrutura do sistema.`;
+
+async function fetchByName(q){
+  // 1. Try backend
+  if(S.beOk){
+    try{return await bePost("/api/perfume/search",{query:q});}
+    catch(e){console.log("Backend failed:",e);}
+  }
+  // 2. Fallback: Claude with knowledge
+  const raw=await llm([{role:"user",content:`Dados completos do Fragrantica: "${q}". Use dados reais do site.`}],PSYS);
+  try{return JSON.parse(raw.replace(/```json|```/g,"").trim());}catch{return null;}
+}
+
+async function fetchByURL(url){
+  // 1. Try backend
+  if(S.beOk){
+    try{return await bePost("/api/perfume/url",{url});}
+    catch(e){console.log("Backend URL failed:",e);}
+  }
+  // 2. Fallback: extract name from URL and use Claude
+  const m=url.match(/\/([^\/]+)-\d+\.html/);
+  const q=m?m[1].replace(/-/g," "):url;
+  return fetchByName(q);
+}
+
+async function fetchByScreenshots(images){
+  // images = [{b64, mt}] — can be 1-5 screenshots
+  const content=[];
+  images.forEach(img=>{
+    content.push({type:"image",source:{type:"base64",media_type:img.mt,data:img.b64}});
+  });
+  content.push({type:"text",text:"Analise todos os prints do Fragrantica enviados e extraia TODOS os dados visíveis. Retorne o JSON completo."});
+  const raw=await llm([{role:"user",content}],SSYS,2000);
+  try{
+    const d=JSON.parse(raw.replace(/```json|```/g,"").trim());
+    // try to also 1. get backend data to fill gaps
+    if(d.nome&&S.beOk){
+      try{
+        const be=await bePost("/api/perfume/search",{query:`${d.marca} ${d.nome}`});
+        // Merge: screenshot data takes priority, backend fills gaps
+        return{...be,...d,
+          acordes:d.acordes?.length?d.acordes:be.acordes,
+          notas_topo:d.notas_topo?.length?d.notas_topo:be.notas_topo,
+          notas_coracao:d.notas_coracao?.length?d.notas_coracao:be.notas_coracao,
+          notas_fundo:d.notas_fundo?.length?d.notas_fundo:be.notas_fundo,
+        };
+      }catch{}
+    }
+    return d;
+  }catch{return null;}
+}
+
+async function fetchByBottlePhoto(b64,mt){
+  // Photo of physical bottle — identify then fetch
+  const idRaw=await llm([{role:"user",content:[
+    {type:"image",source:{type:"base64",media_type:mt,data:b64}},
+    {type:"text",text:"Identifique o perfume neste frasco. Responda APENAS: MARCA: [marca] | NOME: [nome]"}
+  ]}],"Você identifica perfumes por imagem de frasco.",200);
+  const nm=idRaw.match(/NOME:\s*([^|]+)/i)?.[1]?.trim();
+  const mk=idRaw.match(/MARCA:\s*([^|]+)/i)?.[1]?.trim();
+  if(!nm)return null;
+  return fetchByName(`${mk||""} ${nm}`);
+}
+
+async function buildProfile(perfumes){
+  const sys=`Especialista em perfumaria. JSON apenas:
+{"familias":[{"nome":"s","porcentagem":0}],"acordes":[{"nome":"s","porcentagem":0}],
+"notas_topo_fav":["s"],"notas_coracao_fav":["s"],"notas_fundo_fav":["s"],
+"resumo":"s","personalidade":"s","estacoes_pref":["s"],"horarios_pref":["s"],
+"ocasioes_pref":["s"],"dna_olfativo":["s"],"caracteristicas":["s"],"evitar":["s"]}`;
+  const lista=perfumes.map(p=>
+    `${p.nome}(${p.marca}) nota:${p.minha_nota??0}/10 família:${p.familia} acordes:[${p.acordes?.slice(0,4).map(a=>a.nome).join(",")}] topo:[${p.notas_topo?.map(n=>n.nome||n).join(",")}] coração:[${p.notas_coracao?.map(n=>n.nome||n).join(",")}] fundo:[${p.notas_fundo?.map(n=>n.nome||n).join(",")}] estações:[${p.estacoes?.join(",")}]`
+  ).join("\n");
+  const raw=await llm([{role:"user",content:`Coleção:\n${lista}`}],sys,1500);
+  try{return JSON.parse(raw.replace(/```json|```/g,"").trim());}catch{return null;}
+}
+
+async function matchP(p,profile){
+  const sys=`JSON: {"porcentagem":number,"razao":"s","pontos_fortes":["s"],"pontos_fracos":["s"]}`;
+  const raw=await llm([{role:"user",content:`Perfil:${JSON.stringify(profile)}\nPerfume:${JSON.stringify({nome:p.nome,familia:p.familia,acordes:p.acordes?.slice(0,5),estacoes:p.estacoes})}`}],sys,400);
+  try{return JSON.parse(raw.replace(/```json|```/g,"").trim());}
+  catch{return{porcentagem:50,razao:"—",pontos_fortes:[],pontos_fracos:[]};}
+}
+
+async function discover(profile,col){
+  const sys=`JSON array de 6 perfumes reais do Fragrantica:
+[{"nome":"s","marca":"s","razao":"s","familia":"s","notas_principais":["s"],"porcentagem":0,"concentracao":"s","estacoes":["s"]}]`;
+  const raw=await llm([{role:"user",content:`Perfil:${JSON.stringify(profile)}\nNão recomendar:${col.map(p=>p.nome).join(",")}`}],sys,1200);
+  try{const p=JSON.parse(raw.replace(/```json|```/g,"").trim());return Array.isArray(p)?p:[];}catch{return[];}
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+async function doLogin(){
+  const n=prompt("Seu nome:");
+  if(n?.trim()){
+    S.user={name:n.trim(),uid:"local"};
+    localStorage.setItem("pv_user",JSON.stringify(S.user));
+    set({showLogin:false});
+  }
+}
+async function doLogout(){
+  S.user=null;localStorage.removeItem("pv_user");render();
+}
+
+// ── Price ────────────────────────────────────────────────────────────────────
+async function getBRPrice(id,nome,marca){
+  set({lPriceId:id});
+  try{
+    const r=await bePost("/api/price/br",{nome,marca});
+    const upd=l=>l.map(p=>p.id===id?{...p,preco_brl:r.preco_brl,preco_fonte:r.fonte}:p);
+    S.col=upd(S.col);S.wish=upd(S.wish);save();
+  }catch{}
+  set({lPriceId:null});
+}
+
+// ── Main flow ─────────────────────────────────────────────────────────────────
+async function doSearch(req,isWish){
+  set({lSearch:true,err:""});
+  try{
+    let data;
+    if(req.type==="name")        data=await fetchByName(req.v);
+    else if(req.type==="url")    data=await fetchByURL(req.v);
+    else if(req.type==="ss")     data=await fetchByScreenshots(req.images);
+    else if(req.type==="bottle") data=await fetchByBottlePhoto(req.b64,req.mt);
+    if(!data||!data.nome)throw new Error("Perfume não encontrado. Tente outro modo de busca.");
+    set({preview:{data,isWish},lSearch:false});
+  }catch(e){set({lSearch:false,err:e.message||"Erro ao buscar."});}
+}
+
+async function doConfirm(){
+  const{preview}=S;if(!preview)return;
+  const item={...preview.data,id:Date.now(),minha_nota:0};
+  if(preview.isWish){
+    S.wish=[item,...S.wish];
+    if(S.profile){const m=await matchP(item,S.profile);S.matches={...S.matches,[item.id]:m};}
+  }else{
+    S.col=[item,...S.col];S.profile=null;
+  }
+  save();set({preview:null});
+}
+
+async function doProfile(){
+  set({lProfile:true,err:""});
+  try{
+    const p=await buildProfile(S.col);
+    S.profile=p;
+    const ms={};
+    for(const w of S.wish)ms[w.id]=await matchP(w,p);
+    S.matches=ms;
+  }catch{set({err:"Erro ao gerar perfil."});}
+  set({lProfile:false});
+}
+
+async function doDiscover(){
+  set({lDisc:true,err:""});
+  try{S.disc=await discover(S.profile,S.col);}
+  catch{set({err:"Erro."});}
+  set({lDisc:false});
+}
+
+function moveToCol(id){
+  const p=S.wish.find(w=>w.id===id);if(!p)return;
+  S.wish=S.wish.filter(w=>w.id!==id);
+  const m={...S.matches};delete m[id];S.matches=m;
+  S.col=[{...p,id:Date.now()},...S.col];
+  S.profile=null;save();render();
+}
+
+// ── DOM helpers ───────────────────────────────────────────────────────────────
+function h(tag,props={},kids=[]){
+  const e=document.createElement(tag);
+  for(const[k,v]of Object.entries(props)){
+    if(k==="style"&&typeof v==="object")Object.assign(e.style,v);
+    else if(k.startsWith("on"))e.addEventListener(k.slice(2).toLowerCase(),v);
+    else if(k==="html")e.innerHTML=v;
+    else e.setAttribute(k,v);
+  }
+  kids.forEach(c=>{
+    if(c==null)return;
+    if(c instanceof Node)e.appendChild(c);
+    else e.appendChild(document.createTextNode(String(c)));
+  });
+  return e;
+}
+function T(t){return document.createTextNode(t);}
+function dots(){
+  const w=h("span",{class:"dots"});
+  [0,1,2].forEach(i=>{const s=h("i");s.style.animationDelay=`${i*.2}s`;w.appendChild(s);});
+  return w;
+}
+function aBar(name,pct,max){
+  const c=aC(name),w=Math.min(100,Math.round((pct/(max||100))*100));
+  const wrap=h("div",{style:{marginBottom:"8px"}});
+  const row=h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:"3px"}});
+  row.appendChild(h("span",{style:{fontSize:"12px",color:"#ddd"}},[name]));
+  row.appendChild(h("span",{style:{fontSize:"11px",color:c,fontWeight:"700"}},[Math.round(pct)+"%"]));
+  const bg=h("div",{style:{height:"11px",background:"#181818",borderRadius:"6px",overflow:"hidden"}});
+  const fill=h("div",{style:{width:"0%",height:"100%",background:c,borderRadius:"6px",transition:"width .9s ease",
+    boxShadow:`0 0 8px ${c}55`}});
+  bg.appendChild(fill);wrap.appendChild(row);wrap.appendChild(bg);
+  setTimeout(()=>{fill.style.width=w+"%";},50);
+  return wrap;
+}
+function chip(note,sm){
+  const nm=typeof note==="string"?note:note?.nome||"";
+  return h("span",{class:"chip"+(sm?" sm":"")},[ h("span",{style:{fontSize:sm?"12px":"14px"}},[nE(nm)]),nm ]);
+}
+function bdg(label,icon){return h("span",{class:"bdg"},[icon," ",label]);}
+function bottle(nome,marca,color,imagem,size=52){
+  const c=color||aC(nome);
+  if(imagem){
+    const w=h("div",{style:{width:size+"px",height:(size*1.4)+"px",borderRadius:"8px",overflow:"hidden",
+      flexShrink:"0",border:`1.5px solid ${c}55`,background:"#0a0a0a"}});
+    const img=h("img",{src:imagem,alt:nome,style:{width:"100%",height:"100%",objectFit:"contain"}});
+    img.onerror=()=>w.replaceWith(bottle(nome,marca,color,null,size));
+    w.appendChild(img);return w;
+  }
+  const b=h("div",{style:{width:size+"px",height:(size*1.4)+"px",borderRadius:(size*.13)+"px",flexShrink:"0",
+    background:`linear-gradient(145deg,${c}33,${c}99,${c}cc)`,border:`1.5px solid ${c}88`,
+    position:"relative",overflow:"hidden",display:"flex",flexDirection:"column",
+    alignItems:"center",justifyContent:"flex-end",boxShadow:`0 4px 14px ${c}44`}});
+  b.appendChild(h("div",{style:{position:"absolute",top:"0",left:"10%",width:"28%",height:"50%",background:"rgba(255,255,255,.22)",borderRadius:"0 0 50% 50%"}}));
+  b.appendChild(h("div",{style:{position:"absolute",top:"0",left:"28%",width:"44%",height:"20%",background:`${c}dd`,borderRadius:"3px 3px 0 0"}}));
+  b.appendChild(h("div",{style:{position:"absolute",top:"0",left:"23%",width:"54%",height:"10%",background:"#D4A843",borderRadius:"3px 3px 0 0"}}));
+  b.appendChild(h("div",{style:{fontSize:(size*.28)+"px",color:"rgba(255,255,255,.9)",fontWeight:"700",zIndex:"1",marginBottom:(size*.06)+"px"}},[( nome||"?")[0].toUpperCase()]));
+  b.appendChild(h("div",{style:{fontSize:(size*.1)+"px",color:"rgba(255,255,255,.5)",textTransform:"uppercase",zIndex:"1",marginBottom:(size*.06)+"px",maxWidth:"90%",overflow:"hidden",textAlign:"center",textOverflow:"ellipsis",whiteSpace:"nowrap"}},[( marca||"").slice(0,10)]));
+  return b;
+}
+function ring(value,max,color,label,size=60){
+  const pct=Math.min(1,value/max),r=(size-10)/2,circ=2*Math.PI*r;
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.setAttribute("width",size);svg.setAttribute("height",size);svg.style.transform="rotate(-90deg)";
+  const mkC=(stroke,da)=>{const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("cx",size/2);c.setAttribute("cy",size/2);c.setAttribute("r",r);
+    c.setAttribute("fill","none");c.setAttribute("stroke",stroke);c.setAttribute("stroke-width","5");
+    if(da)c.setAttribute("stroke-dasharray",da);if(da)c.setAttribute("stroke-linecap","round");
+    return c;};
+  svg.appendChild(mkC("#1e1e1e"));
+  const fg=mkC(color,`0 ${circ}`);svg.appendChild(fg);
+  setTimeout(()=>{fg.setAttribute("stroke-dasharray",`${pct*circ} ${circ}`);fg.style.transition="stroke-dasharray 1s ease";},50);
+  const wrap=h("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:"3px"}});
+  const box=h("div",{style:{position:"relative",width:size+"px",height:size+"px"}});
+  box.appendChild(svg);
+  box.appendChild(h("div",{style:{position:"absolute",inset:"0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:(size*.22)+"px",fontWeight:"700",color,fontFamily:"Georgia,serif"}},[Math.round(value)+""  ]));
+  wrap.appendChild(box);wrap.appendChild(h("span",{style:{fontSize:"10px",color:"#555"}},[label]));
+  return wrap;
+}
+
+// ── Screenshot modal (multi-image) ────────────────────────────────────────────
+function buildSSModal(isWish){
+  const images=[];
+  const fileRef=h("input",{type:"file",accept:"image/*",multiple:"true",style:{display:"none"}});
+  const camRef =h("input",{type:"file",accept:"image/*",capture:"environment",style:{display:"none"}});
+  const ov=h("div",{class:"modal"});
+  const box=h("div",{class:"mbox"});
+  box.appendChild(h("div",{style:{fontFamily:"Georgia,serif",fontSize:"15px",color:"#F0E6C8",marginBottom:"4px"}},["📸 Print do Fragrantica"]));
+  box.appendChild(h("div",{style:{fontSize:"11px",color:"#555",marginBottom:"12px",lineHeight:"1.5"}},["Envie 1 a 3 prints da página do perfume no Fragrantica. O app lê tudo automaticamente: frasco, acordes, notas, avaliações e quando usar."]));
+
+  const preview=h("div",{style:{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"12px",minHeight:"50px"}});
+  const count=h("div",{style:{fontSize:"10px",color:"#555",marginBottom:"8px"}},["0 imagens selecionadas"]);
+
+  function addImages(files){
+    Array.from(files).slice(0,3-images.length).forEach(f=>{
+      const mt=f.type||"image/jpeg";
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        const b64=ev.target.result.split(",")[1];
+        images.push({b64,mt,src:ev.target.result});
+        const thumb=h("img",{src:ev.target.result,style:{width:"70px",height:"70px",objectFit:"cover",borderRadius:"8px",border:"1px solid #333"}});
+        preview.appendChild(thumb);
+        count.textContent=`${images.length} imagem(ns) selecionada(s)`;
+      };
+      reader.readAsDataURL(f);
+    });
+  }
+
+  fileRef.onchange=e=>{addImages(e.target.files);e.target.value="";};
+  camRef.onchange=e=>{addImages(e.target.files);e.target.value="";};
+
+  const grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"12px"}});
+  const gb=h("button",{class:"ghost",style:{padding:"14px 8px",textAlign:"center",lineHeight:"1.5"}},["🖼\nGaleria/\nUpload"]);
+  gb.onclick=()=>fileRef.click();
+  const cb=h("button",{class:"ghost",style:{padding:"14px 8px",textAlign:"center",lineHeight:"1.5"}},["📸\nCâmera"]);
+  cb.onclick=()=>camRef.click();
+  grid.appendChild(gb);grid.appendChild(cb);
+
+  box.appendChild(grid);box.appendChild(preview);box.appendChild(count);
+
+  const hint=h("div",{style:{background:"#0a0a0a",borderRadius:"10px",padding:"10px 12px",marginBottom:"12px",fontSize:"11px",color:"#666",lineHeight:"1.6"}});
+  hint.innerHTML="💡 <strong style='color:#aaa'>Dica:</strong> Tire prints de:<br>1️⃣ Tela principal (frasco + acordes)<br>2️⃣ Notas de topo/coração/fundo<br>3️⃣ Avaliações e quando usar";
+  box.appendChild(hint);
+
+  const btnrow=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}});
+  const cancel=h("button",{class:"ghost",style:{width:"100%"}},["Cancelar"]);
+  cancel.onclick=()=>ov.remove();
+  const go=h("button",{class:"gold",style:{width:"100%"}});
+  if(S.lSearch){go.appendChild(dots());go.appendChild(T(" Analisando..."));}
+  else go.appendChild(T("✦ Analisar"));
+  go.onclick=async()=>{
+    if(!images.length){alert("Adicione ao menos 1 print do Fragrantica.");return;}
+    ov.remove();
+    await doSearch({type:"ss",images},isWish);
+  };
+  btnrow.appendChild(cancel);btnrow.appendChild(go);
+  box.appendChild(btnrow);
+  box.appendChild(fileRef);box.appendChild(camRef);
+  ov.appendChild(box);return ov;
+}
+
+// ── Add Form ──────────────────────────────────────────────────────────────────
+function buildAddForm(isWish){
+  const wrap=h("div",{style:{marginBottom:"16px"}});
+  let mode="name";
+  const fileRef=h("input",{type:"file",accept:"image/*",style:{display:"none"}});
+  const camRef =h("input",{type:"file",accept:"image/*",capture:"environment",style:{display:"none"}});
+
+  const pills=h("div",{style:{display:"flex",gap:"5px",marginBottom:"10px"}});
+  const modes=[["name","✏ Nome"],["url","🔗 URL"],["ss","📸 Print Fragrantica"],["bottle","📷 Frasco"]];
+  let pBtns=[];
+  modes.forEach(([m,l],i)=>{
+    const b=h("button",{style:{flex:"1",padding:"7px 3px",borderRadius:"9px",border:"none",cursor:"pointer",
+      background:m==="name"?"linear-gradient(135deg,#D4A843,#8B6914)":"#141414",
+      color:m==="name"?"#000":"#555",fontSize:"9px",fontWeight:m==="name"?"700":"400",fontFamily:"Georgia,serif",
+      lineHeight:"1.3",textAlign:"center"}});
+    b.textContent=l;
+    b.onclick=()=>{
+      mode=m;
+      pBtns.forEach((pb,pi)=>{
+        pb.style.background=pi===i?"linear-gradient(135deg,#D4A843,#8B6914)":"#141414";
+        pb.style.color=pi===i?"#000":"#555";
+        pb.style.fontWeight=pi===i?"700":"400";
+      });
+      updateForm();
+    };
+    pBtns.push(b);pills.appendChild(b);
+  });
+  wrap.appendChild(pills);
+
+  const area=h("div");wrap.appendChild(area);
+  wrap.appendChild(fileRef);wrap.appendChild(camRef);
+
+  function handleBottle(e){
+    const f=e.target.files?.[0];if(!f)return;
+    const mt=f.type||"image/jpeg";
+    const reader=new FileReader();
+    reader.onload=ev=>doSearch({type:"bottle",b64:ev.target.result.split(",")[1],mt},isWish);
+    reader.readAsDataURL(f);e.target.value="";
+  }
+  fileRef.onchange=handleBottle;camRef.onchange=handleBottle;
+
+  function updateForm(){
+    area.innerHTML="";
+    if(mode==="name"){
+      const row=h("div",{style:{display:"flex",gap:"8px"}});
+      const inp=h("input",{type:"text",class:"inp",style:{flex:"1"},placeholder:isWish?"Ex: Oud Wood Tom Ford...":"Ex: Sospiro Vibrato EDP..."});
+      inp.onkeydown=e=>{if(e.key==="Enter"&&inp.value.trim())doSearch({type:"name",v:inp.value.trim()},isWish);};
+      const btn=h("button",{class:"gold",style:{flexShrink:"0",padding:"11px 14px"}});
+      btn.onclick=()=>{if(inp.value.trim())doSearch({type:"name",v:inp.value.trim()},isWish);};
+      if(S.lSearch){btn.appendChild(dots());}else btn.appendChild(T("Buscar"));
+      row.appendChild(inp);row.appendChild(btn);area.appendChild(row);
+    }
+    if(mode==="url"){
+      const row=h("div",{style:{display:"flex",gap:"8px"}});
+      const inp=h("input",{type:"text",class:"inp",style:{flex:"1",fontSize:"11px"},placeholder:"https://www.fragrantica.com/perfume/..."});
+      inp.onkeydown=e=>{if(e.key==="Enter"&&inp.value.includes("fragrantica"))doSearch({type:"url",v:inp.value.trim()},isWish);};
+      const btn=h("button",{class:"gold",style:{flexShrink:"0",padding:"11px 12px"}});
+      btn.onclick=()=>{if(inp.value.includes("fragrantica"))doSearch({type:"url",v:inp.value.trim()},isWish);};
+      if(S.lSearch){btn.appendChild(dots());}else btn.appendChild(T("Buscar"));
+      row.appendChild(inp);row.appendChild(btn);area.appendChild(row);
+      area.appendChild(h("div",{style:{fontSize:"10px",color:"#444",marginTop:"5px",fontStyle:"italic"}},["Cole a URL do Fragrantica → dados 100% precisos"]));
+    }
+    if(mode==="ss"){
+      // Screenshot mode - opens dedicated modal
+      const btn=h("button",{class:"gold",style:{width:"100%",padding:"14px",borderRadius:"12px",fontSize:"13px"}});
+      btn.appendChild(T("📸 Enviar prints do Fragrantica"));
+      btn.onclick=()=>{
+        const modal=buildSSModal(isWish);
+        document.body.appendChild(modal);
+      };
+      area.appendChild(btn);
+      area.appendChild(h("div",{style:{fontSize:"10px",color:"#555",textAlign:"center",marginTop:"8px",fontStyle:"italic",lineHeight:"1.5"}},["Envie 1-3 screenshots da página do Fragrantica.\nO app extrai tudo automaticamente."]));
+      if(S.lSearch){
+        const ld=h("div",{style:{textAlign:"center",marginTop:"12px",color:"#888",fontSize:"12px"}});
+        ld.appendChild(dots());ld.appendChild(T(" Analisando prints..."));
+        area.appendChild(ld);
+      }
+    }
+    if(mode==="bottle"){
+      const grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}});
+      [["🖼","Galeria/Upload",fileRef],["📸","Câmera",camRef]].forEach(([icon,lbl,ref])=>{
+        const b=h("button",{style:{background:"#141414",border:"1px solid #222",borderRadius:"14px",
+          color:"#D4A843",padding:"18px 8px",cursor:"pointer",fontSize:"11px",
+          textAlign:"center",lineHeight:"1.5"}});
+        b.innerHTML=`<div style="font-size:28px;margin-bottom:6px">${icon}</div>${lbl}`;
+        b.onclick=()=>ref.click();grid.appendChild(b);
+      });
+      area.appendChild(grid);
+      if(S.lSearch){const ld=h("div",{style:{textAlign:"center",marginTop:"14px",color:"#777",fontSize:"12px"}});ld.appendChild(dots());ld.appendChild(T(" Identificando..."));area.appendChild(ld);}
+      area.appendChild(h("div",{style:{fontSize:"10px",color:"#333",textAlign:"center",marginTop:"8px",fontStyle:"italic"}},["Fotografe o frasco físico do perfume"]));
+    }
+  }
+  updateForm();
+  return wrap;
+}
+
+// ── Preview drawer ────────────────────────────────────────────────────────────
+function buildPreview(){
+  const{data,isWish}=S.preview;
+  const fc=aC(data.acordes?.[0]?.nome||data.familia);
+  const maxA=Math.max(...(data.acordes||[{porcentagem:1}]).map(a=>a.porcentagem));
+  const ov=h("div",{class:"ov"});
+  const dr=h("div",{class:"dr"});dr.style.setProperty("--c",fc);
+  dr.appendChild(h("div",{class:"hnd"}));
+
+  // Header
+  const hrow=h("div",{style:{display:"flex",gap:"14px",marginBottom:"14px",alignItems:"flex-start"}});
+  hrow.appendChild(bottle(data.nome,data.marca,fc,data.imagem,68));
+  const info=h("div",{style:{flex:"1",minWidth:"0"}});
+  info.appendChild(h("div",{style:{fontFamily:"Georgia,serif",fontSize:"16px",color:"#F0E6C8",fontWeight:"600",lineHeight:"1.2"}},[data.nome||""]));
+  info.appendChild(h("div",{style:{fontSize:"11px",color:"#666",margin:"4px 0 2px"}},[[data.marca,data.perfumista].filter(Boolean).join(" · ")]));
+  info.appendChild(h("div",{style:{fontSize:"11px",color:"#444"}},[[data.concentracao,data.ano].filter(Boolean).join(" · ")]));
+  if(data.fragrantica_nota>0){
+    const rr=h("div",{style:{display:"flex",alignItems:"center",gap:"6px",marginTop:"5px"}});
+    rr.appendChild(h("span",{style:{fontSize:"13px",color:"#D4A843"}},["⭐"]));
+    rr.appendChild(h("span",{style:{fontSize:"13px",color:"#D4A843",fontWeight:"700"}},[Number(data.fragrantica_nota).toFixed(2)]));
+    if(data.votos_comunidade>0)rr.appendChild(h("span",{style:{fontSize:"9px",color:"#444"}},["("+data.votos_comunidade.toLocaleString()+" votos)"]));
+    info.appendChild(rr);
+  }
+  const tags=h("div",{style:{marginTop:"6px",display:"flex",flexWrap:"wrap",gap:"4px"}});
+  [data.familia,data.genero].filter(Boolean).forEach(v=>{
+    tags.appendChild(h("span",{style:{background:`${fc}22`,border:`1px solid ${fc}44`,borderRadius:"12px",color:fc,fontSize:"10px",padding:"2px 8px"}},[v]));
+  });
+  info.appendChild(tags);hrow.appendChild(info);dr.appendChild(hrow);
+
+  // Accords
+  if(data.acordes?.length){
+    const ab=h("div",{style:{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"12px",marginBottom:"12px"}});
+    ab.appendChild(h("div",{style:{fontSize:"9px",color:"#555",textTransform:"uppercase",letterSpacing:".14em",marginBottom:"10px"}},["Acordes Principais"]));
+    data.acordes.slice(0,7).forEach(a=>ab.appendChild(aBar(a.nome,a.porcentagem,maxA)));
+    dr.appendChild(ab);
+  }
+
+  // Seasons/time
+  if(data.estacoes?.length||data.horarios?.length){
+    const sb=h("div",{style:{marginBottom:"12px",display:"flex",flexWrap:"wrap",gap:"4px"}});
+    (data.estacoes||[]).forEach(s=>sb.appendChild(bdg(s,SI[s]||"🌟")));
+    (data.horarios||[]).forEach(h2=>sb.appendChild(bdg(h2,SI[h2]||"⏰")));
+    (data.ocasioes||[]).forEach(o=>sb.appendChild(bdg(o,"✨")));
+    dr.appendChild(sb);
+  }
+
+  // Performance
+  const perf=h("div",{style:{display:"flex",gap:"8px",marginBottom:"12px"}});
+  [["Longevidade",data.longevidade],["Projeção",data.projecao]].forEach(([k,v])=>{
+    if(v){const d=h("div",{style:{flex:"1",background:"#0e0e0e",border:"1px solid #1a1a1a",borderRadius:"8px",padding:"6px 8px",textAlign:"center"}});
+      d.appendChild(h("div",{style:{fontSize:"9px",color:"#555",textTransform:"uppercase"}},[k]));
+      d.appendChild(h("div",{style:{fontSize:"11px",color:"#ccc",marginTop:"2px",fontWeight:"600"}},[v]));
+      perf.appendChild(d);}
+  });
+  dr.appendChild(perf);
+
+  // Notes
+  [["notas_topo","#D4A843","TOPO"],["notas_coracao","#E91E63","CORAÇÃO"],["notas_fundo","#9C27B0","FUNDO"]].forEach(([key,col,lbl])=>{
+    if(data[key]?.length){
+      const nd=h("div",{style:{marginBottom:"10px"}});
+      nd.appendChild(h("div",{style:{fontSize:"9px",color:col,letterSpacing:".1em",marginBottom:"5px"}},[lbl]));
+      data[key].forEach(n=>nd.appendChild(chip(n)));
+      dr.appendChild(nd);
+    }
+  });
+
+  if(data.descricao)dr.appendChild(h("p",{style:{fontSize:"12px",color:"#888",fontStyle:"italic",fontFamily:"Georgia,serif",lineHeight:"1.7",margin:"10px 0 16px"}},["\""+data.descricao+"\""]));
+
+  const btnrow=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}});
+  const cb=h("button",{class:"ghost",style:{width:"100%"}},["✕ Cancelar"]);
+  cb.onclick=()=>set({preview:null});
+  const ab=h("button",{style:{background:`linear-gradient(135deg,${fc}dd,${fc}88)`,border:"none",borderRadius:"10px",color:"#fff",padding:"13px",cursor:"pointer",fontSize:"13px",fontWeight:"700",width:"100%"}});
+  ab.appendChild(T(isWish?"✦ Quero este":"✦ Adicionar"));
+  ab.onclick=doConfirm;
+  btnrow.appendChild(cb);btnrow.appendChild(ab);dr.appendChild(btnrow);
+  ov.appendChild(dr);return ov;
+}
+
+// ── Perfume card ──────────────────────────────────────────────────────────────
+function buildCard(p,{onDel,onRate,showMatch,match,extra}={}){
+  const fc=aC(p.acordes?.[0]?.nome||p.familia);
+  const nota=p.minha_nota??0;
+  const nc=nota===0?"#333":nota>=8?"#4CAF50":nota>=6?"#D4A843":nota>=4?"#FF9800":"#e57373";
+  const maxA=Math.max(...(p.acordes||[{porcentagem:1}]).map(a=>a.porcentagem));
+  const commPct=Math.round(((p.fragrantica_nota||0)/5)*100);
+  const myPct=Math.round((nota/10)*100);
+  let open=false;
+
+  const card=h("div",{class:"card",style:{border:`1px solid ${fc}33`}});
+  const hdr=h("div",{style:{padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:"12px"}});
+  hdr.appendChild(bottle(p.nome,p.marca,fc,p.imagem,48));
+  const info=h("div",{style:{flex:"1",minWidth:"0"}});
+  info.appendChild(h("div",{style:{fontFamily:"Georgia,serif",fontSize:"13px",color:"#F0E6C8",fontWeight:"600",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},[p.nome||""]));
+  info.appendChild(h("div",{style:{fontSize:"10px",color:"#555",marginTop:"1px"}},[(p.marca||"")+(p.familia?` · ${p.familia}`:"")]));
+  const brow=h("div",{style:{display:"flex",gap:"8px",marginTop:"3px",alignItems:"center",flexWrap:"wrap"}});
+  if(p.fragrantica_nota>0)brow.appendChild(h("span",{style:{fontSize:"10px",color:"#D4A843"}},["⭐ "+Number(p.fragrantica_nota).toFixed(2)]));
+  if(nota>0)brow.appendChild(h("span",{style:{fontSize:"10px",color:nc}},["👤 "+nota+"/10"]));
+  if(p.preco_brl>0)brow.appendChild(h("span",{style:{fontSize:"10px",color:"#4CAF50"}},["R$ "+p.preco_brl]));
+  (p.estacoes||[]).slice(0,2).forEach(s=>brow.appendChild(h("span",{style:{fontSize:"11px"}},[SI[s]||""])));
+  info.appendChild(brow);hdr.appendChild(info);
+  const right=h("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:"2px",flexShrink:"0"}});
+  if(showMatch&&match)right.appendChild(h("span",{style:{fontSize:"11px",fontWeight:"700",color:match.porcentagem>=70?"#4CAF50":match.porcentagem>=50?"#D4A843":"#e57373"}},[Math.round(match.porcentagem)+"%"]));
+  const arr=h("span",{style:{color:"#333",fontSize:"10px",transition:"transform .3s",display:"inline-block"}},["▼"]);
+  right.appendChild(arr);hdr.appendChild(right);
+
+  const body=h("div",{style:{padding:"0 14px 14px",borderTop:"1px solid #181818",display:"none"}});
+
+  // Scores
+  const rings=h("div",{style:{display:"flex",justifyContent:"space-around",padding:"14px 0 12px",borderBottom:"1px solid #181818",marginBottom:"12px"}});
+  rings.appendChild(ring(commPct,100,"#D4A843","Fragrantica",60));
+  rings.appendChild(h("div",{style:{fontSize:"9px",color:"#2a2a2a",alignSelf:"center"}},["vs"]));
+  rings.appendChild(ring(myPct,100,nc,"Minha nota",60));
+  body.appendChild(rings);
+
+  // Rating slider
+  if(onRate){
+    const rw=h("div",{style:{background:"#0d0d0d",borderRadius:"10px",padding:"10px 12px",marginTop:"8px"}});
+    const rrow=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}});
+    rrow.appendChild(h("span",{style:{fontSize:"10px",color:"#555",textTransform:"uppercase",letterSpacing:".1em"}},["Minha nota"]));
+    const rval=h("span",{style:{fontSize:"20px",fontWeight:"700",color:nc,fontFamily:"Georgia,serif"}},[nota+""]);
+    rrow.appendChild(rval);
+    const sl=h("input",{type:"range",min:"0",max:"10",step:"1",value:nota+"",style:{width:"100%",cursor:"pointer",accentColor:nc}});
+    sl.oninput=e=>{
+      const v=Number(e.target.value);
+      rval.textContent=v+"";
+      const c2=v===0?"#333":v>=8?"#4CAF50":v>=6?"#D4A843":v>=4?"#FF9800":"#e57373";
+      rval.style.color=c2;sl.style.accentColor=c2;onRate(p.id,v);
+    };
+    rw.appendChild(rrow);rw.appendChild(sl);body.appendChild(rw);
+  }
+
+  // Match
+  if(showMatch&&match){
+    const mb=h("div",{style:{background:"#0a0d0a",border:"1px solid #1a2a1a",borderRadius:"10px",padding:"10px",marginTop:"10px"}});
+    const mr=h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:"5px"}});
+    mr.appendChild(h("span",{style:{fontSize:"10px",color:"#555",textTransform:"uppercase"}},["Compatibilidade"]));
+    mr.appendChild(h("span",{style:{fontSize:"13px",fontWeight:"700",color:match.porcentagem>=70?"#4CAF50":match.porcentagem>=50?"#D4A843":"#e57373"}},[Math.round(match.porcentagem)+"%"]));
+    const mbg=h("div",{style:{height:"5px",background:"#181818",borderRadius:"3px",overflow:"hidden",marginBottom:"7px"}});
+    const mfg=h("div",{style:{width:`${match.porcentagem}%`,height:"100%",background:match.porcentagem>=70?"#4CAF50":match.porcentagem>=50?"#D4A843":"#e57373",borderRadius:"3px",transition:"width 1s"}});
+    mbg.appendChild(mfg);mb.appendChild(mr);mb.appendChild(mbg);
+    mb.appendChild(h("p",{style:{fontSize:"11px",color:"#666",margin:"0",fontStyle:"italic",lineHeight:"1.5"}},[match.razao||""]));
+    if(match.pontos_fortes?.length)mb.appendChild(h("div",{style:{fontSize:"10px",color:"#4CAF50",marginTop:"5px"}},[match.pontos_fortes.map(p=>"✦ "+p).join(" · ")]));
+    body.appendChild(mb);
+  }
+
+  // Accords
+  if(p.acordes?.length){
+    const al=h("div",{style:{marginTop:"12px"}});
+    al.appendChild(h("div",{style:{fontSize:"9px",color:"#444",textTransform:"uppercase",letterSpacing:".12em",marginBottom:"8px"}},["Acordes"]));
+    p.acordes.slice(0,6).forEach(a=>al.appendChild(aBar(a.nome,a.porcentagem,maxA)));
+    body.appendChild(al);
+  }
+
+  // Seasons
+  if(p.estacoes?.length||p.horarios?.length){
+    const sl=h("div",{style:{marginTop:"10px",display:"flex",flexWrap:"wrap",gap:"4px"}});
+    (p.estacoes||[]).forEach(s=>sl.appendChild(bdg(s,SI[s]||"🌟")));
+    (p.horarios||[]).forEach(h2=>sl.appendChild(bdg(h2,SI[h2]||"⏰")));
+    body.appendChild(sl);
+  }
+
+  // Notes
+  [["notas_topo","#D4A843","TOPO"],["notas_coracao","#E91E63","CORAÇÃO"],["notas_fundo","#9C27B0","FUNDO"]].forEach(([key,col,lbl])=>{
+    if(p[key]?.length){
+      const nd=h("div",{style:{marginTop:"9px"}});
+      nd.appendChild(h("div",{style:{fontSize:"9px",color:col,marginBottom:"4px"}},[lbl]));
+      p[key].forEach(n=>nd.appendChild(chip(n,true)));
+      body.appendChild(nd);
+    }
+  });
+
+  // Prices
+  if(p.preco_usd>0||p.preco_brl>0){
+    const pr=h("div",{style:{display:"flex",gap:"8px",marginTop:"12px"}});
+    if(p.preco_usd>0){const pd=h("div",{style:{flex:"1",background:"#0d0d0d",borderRadius:"8px",padding:"6px 10px",textAlign:"center"}});pd.appendChild(h("div",{style:{fontSize:"9px",color:"#444",textTransform:"uppercase"}},["USD"]));pd.appendChild(h("div",{style:{fontSize:"13px",color:"#ccc",fontWeight:"700"}},["US$ "+p.preco_usd]));pr.appendChild(pd);}
+    if(p.preco_brl>0){const pb=h("div",{style:{flex:"1",background:"#060e06",border:"1px solid #152015",borderRadius:"8px",padding:"6px 10px",textAlign:"center"}});pb.appendChild(h("div",{style:{fontSize:"9px",color:"#2E7D32",textTransform:"uppercase"}},["Brasil"]));pb.appendChild(h("div",{style:{fontSize:"13px",color:"#4CAF50",fontWeight:"700"}},["R$ "+p.preco_brl]));if(p.preco_fonte)pb.appendChild(h("div",{style:{fontSize:"9px",color:"#2E7D32"}},[p.preco_fonte]));pr.appendChild(pb);}
+    body.appendChild(pr);
+  }
+
+  if(p.descricao)body.appendChild(h("p",{style:{fontSize:"11px",color:"#666",fontStyle:"italic",fontFamily:"Georgia,serif",lineHeight:"1.6",margin:"10px 0 0"}},["\""+p.descricao+"\""]));
+  if(extra)body.appendChild(extra);
+  if(onDel){const db=h("button",{style:{width:"100%",background:"none",border:"1px solid #2a1515",borderRadius:"8px",color:"#5a2020",padding:"7px",cursor:"pointer",fontSize:"11px",marginTop:"12px"}},["Remover"]);db.onclick=()=>onDel(p.id);body.appendChild(db);}
+
+  hdr.onclick=()=>{open=!open;body.style.display=open?"block":"none";arr.style.transform=open?"rotate(180deg)":"none";};
+  card.appendChild(hdr);card.appendChild(body);
+  return card;
+}
+
+// ── Price button ──────────────────────────────────────────────────────────────
+function priceBtn(p){
+  const b=h("button",{style:{width:"100%",background:"none",border:"1px solid #152015",borderRadius:"8px",
+    color:S.beOk&&S.lPriceId!==p.id?"#2E7D32":"#444",padding:"7px",cursor:"pointer",fontSize:"10px",marginTop:"10px"}});
+  if(S.lPriceId===p.id){b.appendChild(dots());b.appendChild(T(" Buscando preço..."));}
+  else b.appendChild(T("🇧🇷 Buscar preço no Brasil"));
+  b.onclick=()=>{if(S.beOk)getBRPrice(p.id,p.nome,p.marca);};
+  return b;
+}
+
+// ── Store manager ─────────────────────────────────────────────────────────────
+function buildStores(pid){
+  const stores=S.stores[pid]||[];
+  const wrap=h("div",{style:{background:"#060e06",border:"1px solid #152015",borderRadius:"12px",padding:"12px",marginTop:"10px"}});
+  wrap.appendChild(h("div",{style:{fontSize:"9px",color:"#2E7D32",textTransform:"uppercase",letterSpacing:".12em",marginBottom:"8px"}},["🛒 Onde comprar"]));
+  stores.forEach(s=>{
+    const row=h("div",{style:{display:"flex",alignItems:"center",gap:"6px",marginBottom:"6px",background:"#0d0d0d",borderRadius:"8px",padding:"6px 10px"}});
+    const info=h("div",{style:{flex:"1",minWidth:"0"}});
+    info.appendChild(h("div",{style:{fontSize:"11px",color:"#ccc",fontWeight:"600"}},[s.nome]));
+    const srow=h("div",{style:{display:"flex",gap:"8px",fontSize:"10px"}});
+    if(s.preco)srow.appendChild(h("span",{style:{color:"#4CAF50"}},["R$ "+s.preco]));
+    if(s.link){const a=h("a",{href:s.link,target:"_blank",style:{color:"#64B5F6",textDecoration:"none"}},["🔗 ver"]);srow.appendChild(a);}
+    info.appendChild(srow);row.appendChild(info);
+    const rb=h("button",{style:{background:"none",border:"none",color:"#444",cursor:"pointer",fontSize:"16px",padding:"0 4px"}},["×"]);
+    rb.onclick=()=>{S.stores[pid]=(S.stores[pid]||[]).filter(x=>x.id!==s.id);save();render();};
+    row.appendChild(rb);wrap.appendChild(row);
+  });
+  const ni=h("input",{type:"text",placeholder:"Loja",style:{flex:"2",minWidth:"80px",background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:"8px",color:"#ccc",padding:"7px 9px",fontSize:"11px",outline:"none"}});
+  const pi=h("input",{type:"text",placeholder:"R$",style:{width:"55px",background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:"8px",color:"#ccc",padding:"7px 9px",fontSize:"11px",outline:"none"}});
+  const li=h("input",{type:"text",placeholder:"Link (opcional)",style:{flex:"1",background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:"8px",color:"#ccc",padding:"7px 9px",fontSize:"11px",outline:"none"}});
+  const ab=h("button",{style:{background:"#0a1a0a",border:"1px solid #1e3a1e",borderRadius:"8px",color:"#4CAF50",padding:"7px 12px",cursor:"pointer",fontSize:"11px",whiteSpace:"nowrap"}},["+ Add"]);
+  ab.onclick=()=>{
+    if(!ni.value.trim())return;
+    if(!S.stores[pid])S.stores[pid]=[];
+    S.stores[pid].push({id:Date.now(),nome:ni.value.trim(),preco:pi.value.trim(),link:li.value.trim()});
+    save();render();
+  };
+  const r1=h("div",{style:{display:"flex",gap:"6px",flexWrap:"wrap"}});r1.appendChild(ni);r1.appendChild(pi);
+  const r2=h("div",{style:{display:"flex",gap:"6px",marginTop:"6px"}});r2.appendChild(li);r2.appendChild(ab);
+  wrap.appendChild(r1);wrap.appendChild(r2);
+  return wrap;
+}
+
+// ── PDF ───────────────────────────────────────────────────────────────────────
+function exportPDF(){
+  const scr=document.createElement("script");
+  scr.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+  scr.onload=()=>{
+    const date=new Date().toLocaleDateString("pt-BR");
+    const div=document.createElement("div");
+    div.style.cssText="font-family:Georgia,serif;color:#1a1a1a;padding:36px;max-width:660px;background:#fff;";
+    div.innerHTML=`
+      <div style="text-align:center;border-bottom:2px solid #8B6914;padding-bottom:16px;margin-bottom:24px">
+        <div style="font-size:9px;letter-spacing:.3em;color:#8B6914;text-transform:uppercase">✦ OLFACTORY JOURNAL ✦</div>
+        <h1 style="font-size:24px;margin:6px 0 4px;font-weight:400">Perfume Vault</h1>
+        <div style="font-size:11px;color:#888">${S.user?.name||"Minha Coleção"} · ${date}</div>
+      </div>
+      <h2 style="font-size:14px;color:#8B6914;font-weight:400;text-transform:uppercase;border-bottom:1px solid #eee;padding-bottom:6px;margin-bottom:12px">Coleção (${S.col.length})</h2>
+      ${S.col.map(p=>`<div style="margin-bottom:10px;padding:9px 12px;background:#fafafa;border-left:3px solid ${aC(p.acordes?.[0]?.nome||p.familia)};border-radius:0 8px 8px 0">
+        <div style="font-size:13px;font-weight:600">${p.nome} <span style="font-weight:400;font-size:11px;color:#888">— ${p.marca}</span></div>
+        <div style="font-size:10px;color:#888">${[p.familia,p.concentracao].filter(Boolean).join(" · ")}</div>
+        <div style="font-size:10px">${p.fragrantica_nota>0?`<span style="color:#8B6914">⭐ ${Number(p.fragrantica_nota).toFixed(2)}</span>`:""} ${p.minha_nota>0?`<span style="color:#555">👤 ${p.minha_nota}/10</span>`:""} ${p.preco_brl>0?`<span style="color:#2E7D32">R$ ${p.preco_brl}</span>`:""}</div>
+        ${p.acordes?.length?`<div style="font-size:9px;color:#999">Acordes: ${p.acordes.slice(0,5).map(a=>a.nome).join(" · ")}</div>`:""}
+      </div>`).join("")}
+      ${S.wish.length?`<h2 style="font-size:14px;color:#7B1FA2;font-weight:400;text-transform:uppercase;border-bottom:1px solid #eee;padding-bottom:6px;margin:20px 0 12px">Wishlist (${S.wish.length})</h2>${S.wish.map(p=>`<div style="margin-bottom:8px;padding:8px 12px;background:#fafafa;border-left:3px solid #7B1FA2;border-radius:0 8px 8px 0"><div style="font-size:12px;font-weight:600">${p.nome} — ${p.marca}</div>${p.preco_brl>0?`<div style="font-size:10px;color:#2E7D32">R$ ${p.preco_brl}</div>`:""}</div>`).join("")}`:""}
+      ${S.profile?`<h2 style="font-size:14px;color:#0277BD;font-weight:400;text-transform:uppercase;border-bottom:1px solid #eee;padding-bottom:6px;margin:20px 0 12px">Perfil Olfativo</h2><p style="font-size:12px;color:#555;font-style:italic;line-height:1.8">${S.profile.resumo||""}</p>`:""}
+      <div style="text-align:center;margin-top:32px;padding-top:14px;border-top:1px solid #eee;font-size:9px;color:#ccc">PERFUME VAULT · ${date}</div>`;
+    document.body.appendChild(div);
+    window.html2pdf().set({margin:0,filename:"PerfumeVault.pdf",html2canvas:{scale:2,useCORS:true},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"}})
+      .from(div).save().then(()=>document.body.removeChild(div));
+  };
+  document.head.appendChild(scr);
+}
+
+// ── Modals ────────────────────────────────────────────────────────────────────
+function buildLogin(){
+  const ov=h("div",{class:"modal"});
+  const box=h("div",{class:"mbox",style:{textAlign:"center"}});
+  box.appendChild(h("div",{style:{fontSize:"36px",marginBottom:"10px"}},["🫧"]));
+  box.appendChild(h("div",{style:{fontFamily:"Georgia,serif",fontSize:"18px",color:"#F0E6C8",marginBottom:"3px"}},["Perfume Vault"]));
+  box.appendChild(h("div",{style:{fontSize:"10px",color:"#444",letterSpacing:".15em",textTransform:"uppercase",marginBottom:"20px"}},["Seu diário olfativo"]));
+  box.appendChild(h("p",{style:{fontSize:"12px",color:"#777",lineHeight:"1.6",marginBottom:"20px"}},["Entre para salvar seu perfil e acessar de qualquer dispositivo."]));
+  const lb=h("button",{class:"gold",style:{width:"100%",marginBottom:"10px"}},["👤 Entrar com nome"]);
+  lb.onclick=doLogin;
+  const gb=h("button",{class:"ghost",style:{width:"100%",marginBottom:"8px"}},["Continuar sem login"]);
+  gb.onclick=()=>set({showLogin:false});
+  const xb=h("button",{style:{background:"none",border:"none",color:"#333",cursor:"pointer",fontSize:"20px",marginTop:"10px"}},["×"]);
+  xb.onclick=()=>set({showLogin:false});
+  box.appendChild(lb);box.appendChild(gb);box.appendChild(xb);
+  ov.appendChild(box);return ov;
+}
+
+function buildCfg(){
+  const ov=h("div",{class:"modal"});
+  const box=h("div",{class:"mbox"});
+  box.appendChild(h("div",{style:{fontFamily:"Georgia,serif",fontSize:"16px",color:"#F0E6C8",marginBottom:"4px"}},["⚙️ Configurações"]));
+  box.appendChild(h("div",{style:{fontSize:"11px",color:"#555",marginBottom:"16px"}},["URL do backend (Render.com)"]));
+  const inp=h("input",{type:"text",class:"inp",style:{marginBottom:"10px"},placeholder:"https://perfume-vault-api.onrender.com"});
+  inp.value=getBE();
+  const res=h("div",{style:{fontSize:"11px",marginBottom:"10px",minHeight:"18px"}});
+  box.appendChild(inp);box.appendChild(res);
+  const btnrow=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"12px"}});
+  const tb=h("button",{class:"ghost",style:{width:"100%"}},["🔍 Testar"]);
+  tb.onclick=async()=>{
+    res.textContent="Testando...";res.style.color="#888";
+    try{
+      const r=await fetch(inp.value.trim()+"/api/health",{signal:AbortSignal.timeout(8000)});
+      const d=await r.json();
+      res.textContent=d.status==="ok"?"✅ Conectado!":"❌ Erro";
+      res.style.color=d.status==="ok"?"#4CAF50":"#e06060";
+      if(d.status==="ok")set({beOk:true});
+    }catch{
+      try{
+        await fetch(inp.value.trim()+"/api/health",{signal:AbortSignal.timeout(8000),mode:"no-cors"});
+        res.textContent="✅ Servidor respondendo!";res.style.color="#4CAF50";set({beOk:true});
+      }catch{res.textContent="❌ Não encontrado";res.style.color="#e06060";}
+    }
+  };
+  const sb=h("button",{class:"gold",style:{width:"100%"}},["💾 Salvar"]);
+  sb.onclick=()=>{setBE(inp.value);set({showCfg:false,beOk:null});beHealth().then(ok=>set({beOk:ok}));};
+  btnrow.appendChild(tb);btnrow.appendChild(sb);box.appendChild(btnrow);
+  const hint=h("div",{style:{background:"#0a0a0a",borderRadius:"10px",padding:"10px 12px",marginBottom:"12px",fontSize:"11px",color:"#777",lineHeight:"1.6"}});
+  hint.innerHTML="1. Acesse render.com<br>2. Abra o serviço <strong style='color:#ccc'>perfume-vault-api</strong><br>3. Copie a URL no topo";
+  box.appendChild(hint);
+  const cb=h("button",{class:"ghost",style:{width:"100%"}},["Fechar"]);
+  cb.onclick=()=>set({showCfg:false});
+  box.appendChild(cb);ov.appendChild(box);return ov;
+}
+
+// ── Tab content ───────────────────────────────────────────────────────────────
+function tabCol(){
+  const w=h("div");
+  w.appendChild(h("div",{class:"lbl"},["Adicionar à coleção"]));
+  w.appendChild(buildAddForm(false));
+
+  // Backend status hint
+  const hint=h("div",{style:{background:S.beOk?"#060d06":"#0a0906",border:`1px solid ${S.beOk?"#1e4a1e":"#2a1e00"}`,borderRadius:"10px",padding:"10px 12px",marginBottom:"14px",fontSize:"11px",
+    color:S.beOk?"#4a8a4a":"#7a5a10",lineHeight:"1.5"}});
+  hint.innerHTML=S.beOk
+    ?"✅ <strong>Backend online</strong> — dados reais do Fragrantica via API"
+    :S.beOk===false
+    ?"⚠️ <strong>Backend offline</strong> — usando Claude como fallback (dados do conhecimento treinado). Para dados 100% precisos, use 🔗 URL ou 📸 Print do Fragrantica."
+    :"🔄 Verificando conexão com o backend...";
+  w.appendChild(hint);
+
+  if(!S.col.length){
+    const e=h("div",{style:{textAlign:"center",padding:"40px 16px"}});
+    e.appendChild(h("div",{style:{fontSize:"40px",marginBottom:"12px"}},["🫙"]));
+    e.appendChild(h("div",{style:{fontSize:"12px",fontStyle:"italic",color:"#333",lineHeight:"1.7"}},["Sua coleção está vazia.\nUse 📸 Print ou 🔗 URL para dados 100% precisos."]));
+    w.appendChild(e);
+  }else{
+    S.col.forEach(p=>{
+      const ef=h("div");
+      ef.appendChild(priceBtn(p));
+      w.appendChild(buildCard(p,{
+        onDel:id=>{S.col=S.col.filter(x=>x.id!==id);save();render();},
+        onRate:(id,v)=>{S.col=S.col.map(x=>x.id===id?{...x,minha_nota:v}:x);S.profile=null;save();},
+        extra:ef,
+      }));
+    });
+  }
+  return w;
+}
+
+function tabWish(){
+  const w=h("div");
+  w.appendChild(h("div",{class:"lbl"},["Adicionar à wishlist"]));
+  w.appendChild(buildAddForm(true));
+  if(!S.profile&&S.wish.length){
+    const hint=h("div",{style:{background:"#0d0a04",border:"1px solid #2a1e00",borderRadius:"10px",padding:"10px 12px",marginBottom:"12px",fontSize:"11px",color:"#7a5a10",lineHeight:"1.5"}});
+    hint.innerHTML="💡 Gere seu <strong>Perfil Olfativo</strong> para ver % de compatibilidade.";
+    w.appendChild(hint);
+  }
+  if(!S.wish.length){
+    const e=h("div",{style:{textAlign:"center",padding:"40px 16px"}});
+    e.appendChild(h("div",{style:{fontSize:"40px",marginBottom:"12px"}},["✨"]));
+    e.appendChild(h("div",{style:{fontSize:"12px",fontStyle:"italic",color:"#333"}},["Sua wishlist está vazia."]));
+    w.appendChild(e);
+  }else{
+    S.wish.forEach(p=>{
+      const ef=h("div");
+      ef.appendChild(priceBtn(p));
+      ef.appendChild(buildStores(p.id));
+      const mb=h("button",{class:"gold",style:{width:"100%",padding:"11px",borderRadius:"10px",marginTop:"10px",fontSize:"12px"}},["✦ Comprei! Mover para Coleção"]);
+      mb.onclick=()=>moveToCol(p.id);ef.appendChild(mb);
+      w.appendChild(buildCard(p,{
+        onDel:id=>{S.wish=S.wish.filter(x=>x.id!==id);const m={...S.matches};delete m[id];S.matches=m;save();render();},
+        onRate:(id,v)=>{S.wish=S.wish.map(x=>x.id===id?{...x,minha_nota:v}:x);save();},
+        showMatch:!!S.profile,match:S.matches[p.id],extra:ef,
+      }));
+    });
+  }
+  return w;
+}
+
+function tabProfile(){
+  const w=h("div");
+  w.appendChild(h("div",{class:"lbl"},["Perfil Olfativo"]));
+  if(S.col.length<2){
+    const e=h("div",{style:{textAlign:"center",padding:"40px 16px"}});
+    e.appendChild(h("div",{style:{fontSize:"40px",marginBottom:"12px"}},["🌸"]));
+    e.appendChild(h("div",{style:{fontSize:"12px",fontStyle:"italic",color:"#333"}},["Adicione ao menos 2 perfumes à coleção."]));
+    w.appendChild(e);return w;
+  }
+  const pb=h("button",{class:"gold",style:{width:"100%",padding:"13px",borderRadius:"12px",marginBottom:"18px",fontSize:"13px",letterSpacing:".05em"}});
+  if(S.lProfile){pb.style.background="#141414";pb.style.color="#444";pb.appendChild(dots());pb.appendChild(T(" Analisando..."));}
+  else pb.appendChild(T("✦ Gerar / Atualizar Perfil"));
+  pb.onclick=doProfile;w.appendChild(pb);
+  if(!S.profile)return w;
+  const pf=S.profile;
+
+  const sum=h("div",{style:{background:"#0c0900",border:"1px solid #2a1f00",borderRadius:"14px",padding:"14px",marginBottom:"12px"}});
+  sum.appendChild(h("div",{style:{fontSize:"9px",color:"#8B6914",letterSpacing:".18em",textTransform:"uppercase",marginBottom:"8px"}},["Resumo"]));
+  sum.appendChild(h("p",{style:{fontSize:"12px",color:"#ccc",fontStyle:"italic",lineHeight:"1.8",margin:"0"}},[pf.resumo||""]));
+  if(pf.personalidade)sum.appendChild(h("p",{style:{fontSize:"11px",color:"#777",lineHeight:"1.6",margin:"8px 0 0"}},[pf.personalidade]));
+  w.appendChild(sum);
+
+  if(pf.dna_olfativo?.length){
+    const dna=h("div",{style:{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"12px",marginBottom:"12px"}});
+    dna.appendChild(h("div",{style:{fontSize:"9px",color:"#555",textTransform:"uppercase",letterSpacing:".12em",marginBottom:"8px"}},["DNA Olfativo"]));
+    pf.dna_olfativo.forEach(d=>{const c=aC(d);dna.appendChild(h("span",{style:{display:"inline-block",background:`${c}22`,border:`1px solid ${c}44`,borderRadius:"20px",padding:"4px 12px",fontSize:"12px",color:c,margin:"2px 4px 2px 0",fontFamily:"Georgia,serif"}},[d]));});
+    w.appendChild(dna);
+  }
+  if(pf.familias?.length){
+    const fam=h("div",{style:{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"12px",marginBottom:"12px"}});
+    fam.appendChild(h("div",{style:{fontSize:"9px",color:"#555",textTransform:"uppercase",letterSpacing:".12em",marginBottom:"10px"}},["Famílias Preferidas"]));
+    const maxF=Math.max(...pf.familias.map(x=>x.porcentagem));
+    pf.familias.slice(0,6).forEach(f=>fam.appendChild(aBar(f.nome,f.porcentagem,maxF)));
+    w.appendChild(fam);
+  }
+  if(pf.acordes?.length){
+    const ac=h("div",{style:{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"12px",marginBottom:"12px"}});
+    ac.appendChild(h("div",{style:{fontSize:"9px",color:"#555",textTransform:"uppercase",letterSpacing:".12em",marginBottom:"10px"}},["Acordes Dominantes"]));
+    const maxA=Math.max(...pf.acordes.map(x=>x.porcentagem));
+    pf.acordes.slice(0,8).forEach(a=>ac.appendChild(aBar(a.nome,a.porcentagem,maxA)));
+    w.appendChild(ac);
+  }
+  [["notas_topo_fav","#D4A843","Notas de Topo"],["notas_coracao_fav","#E91E63","Notas de Coração"],["notas_fundo_fav","#9C27B0","Notas de Fundo"]].forEach(([k,c,l])=>{
+    if(pf[k]?.length){
+      const nd=h("div",{style:{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"12px",marginBottom:"12px"}});
+      nd.appendChild(h("div",{style:{fontSize:"9px",color:c,textTransform:"uppercase",letterSpacing:".12em",marginBottom:"8px"}},[l]));
+      pf[k].forEach(n=>nd.appendChild(chip(n)));w.appendChild(nd);
+    }
+  });
+  if(pf.estacoes_pref?.length||pf.horarios_pref?.length){
+    const ww=h("div",{style:{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"12px",marginBottom:"12px"}});
+    ww.appendChild(h("div",{style:{fontSize:"9px",color:"#555",textTransform:"uppercase",letterSpacing:".12em",marginBottom:"8px"}},["Quando e Onde Usar"]));
+    (pf.estacoes_pref||[]).forEach(s=>ww.appendChild(bdg(s,SI[s]||"🌟")));
+    (pf.horarios_pref||[]).forEach(h2=>ww.appendChild(bdg(h2,SI[h2]||"⏰")));
+    (pf.ocasioes_pref||[]).forEach(o=>ww.appendChild(bdg(o,"✨")));
+    w.appendChild(ww);
+  }
+  if(pf.caracteristicas?.length){
+    const lv=h("div",{style:{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"12px",marginBottom:"12px"}});
+    lv.appendChild(h("div",{style:{fontSize:"9px",color:"#555",textTransform:"uppercase",letterSpacing:".12em",marginBottom:"8px"}},["Você ama"]));
+    pf.caracteristicas.forEach(c=>{const d=h("div",{style:{fontSize:"12px",color:"#bbb",padding:"5px 0",borderBottom:"1px solid #111"}},["✦ "+c]);lv.appendChild(d);});
+    w.appendChild(lv);
+  }
+  if(pf.evitar?.length){
+    const av=h("div",{style:{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:"12px",padding:"12px"}});
+    av.appendChild(h("div",{style:{fontSize:"9px",color:"#555",textTransform:"uppercase",letterSpacing:".12em",marginBottom:"8px"}},["Tende a evitar"]));
+    pf.evitar.forEach(c=>{const d=h("div",{style:{fontSize:"12px",color:"#444",padding:"5px 0",borderBottom:"1px solid #111"}},["○ "+c]);av.appendChild(d);});
+    w.appendChild(av);
+  }
+  return w;
+}
+
+function tabDisc(){
+  const w=h("div");
+  w.appendChild(h("div",{class:"lbl"},["Descobrir Perfumes"]));
+  if(!S.profile){
+    const e=h("div",{style:{textAlign:"center",padding:"40px 16px"}});
+    e.appendChild(h("div",{style:{fontSize:"40px",marginBottom:"12px"}},["🔭"]));
+    e.appendChild(h("div",{style:{fontSize:"12px",fontStyle:"italic",color:"#333",marginBottom:"16px"}},["Gere seu Perfil Olfativo primeiro."]));
+    const gb=h("button",{style:{background:"none",border:"1px solid #222",borderRadius:"8px",color:"#D4A843",padding:"9px 18px",cursor:"pointer",fontSize:"12px"}},["→ Ir para Perfil"]);
+    gb.onclick=()=>set({tab:2});e.appendChild(gb);w.appendChild(e);return w;
+  }
+  const db=h("button",{style:{width:"100%",padding:"13px",borderRadius:"12px",background:S.lDisc?"#141414":"linear-gradient(135deg,#534AB7,#3C3489)",border:"none",color:S.lDisc?"#444":"#E8E4FF",fontSize:"13px",fontWeight:"700",cursor:S.lDisc?"not-allowed":"pointer",marginBottom:"18px"}});
+  if(S.lDisc){db.appendChild(dots());db.appendChild(T(" Buscando..."));}else db.appendChild(T("✦ Buscar Sugestões para Mim"));
+  db.onclick=doDiscover;w.appendChild(db);
+  if(!S.disc.length&&!S.lDisc)w.appendChild(h("div",{style:{textAlign:"center",padding:"16px",color:"#333",fontSize:"12px",fontStyle:"italic"}},["Clique para receber sugestões."]));
+  S.disc.forEach((d,i)=>{
+    const fc=aC(d.familia);
+    const card=h("div",{style:{background:"#0d0d0d",border:`1px solid ${fc}44`,borderRadius:"14px",padding:"12px",marginBottom:"10px"}});
+    const hrow=h("div",{style:{display:"flex",gap:"12px",alignItems:"flex-start",marginBottom:"10px"}});
+    hrow.appendChild(bottle(d.nome,d.marca,fc,null,46));
+    const info=h("div",{style:{flex:"1",minWidth:"0"}});
+    info.appendChild(h("div",{style:{fontFamily:"Georgia,serif",fontSize:"13px",color:"#F0E6C8",fontWeight:"600"}},[d.nome]));
+    info.appendChild(h("div",{style:{fontSize:"10px",color:"#666",marginTop:"1px"}},[d.marca+" · "+d.familia]));
+    info.appendChild(h("div",{style:{fontSize:"11px",marginTop:"2px"}},[(d.estacoes||[]).slice(0,3).map(s=>SI[s]||"").join(" ")]));
+    hrow.appendChild(info);
+    hrow.appendChild(h("div",{style:{background:`${fc}22`,border:`1px solid ${fc}55`,borderRadius:"20px",padding:"4px 10px",fontSize:"13px",color:fc,fontWeight:"700",flexShrink:"0"}},[Math.round(d.porcentagem)+"%"]));
+    card.appendChild(hrow);
+    const bar=h("div",{style:{height:"5px",background:"#1a1a1a",borderRadius:"3px",overflow:"hidden",marginBottom:"8px"}});
+    const fill=h("div",{style:{width:"0%",height:"100%",background:fc,borderRadius:"3px",transition:"width 1s"}});
+    bar.appendChild(fill);card.appendChild(bar);
+    setTimeout(()=>{fill.style.width=d.porcentagem+"%";},50+i*100);
+    card.appendChild(h("p",{style:{fontSize:"11px",color:"#777",margin:"0 0 8px",fontStyle:"italic",lineHeight:"1.5"}},[d.razao||""]));
+    if(d.notas_principais?.length){const nw=h("div",{style:{marginBottom:"8px"}});d.notas_principais.forEach(n=>nw.appendChild(chip(n,true)));card.appendChild(nw);}
+    const ab=h("button",{style:{background:"none",border:"1px solid #222",borderRadius:"8px",color:"#D4A843",padding:"7px 14px",cursor:"pointer",fontSize:"11px"}},["+ Wishlist"]);
+    ab.onclick=()=>doSearch({type:"name",v:`${d.nome} ${d.marca}`},true);
+    card.appendChild(ab);w.appendChild(card);
+  });
+  return w;
+}
+
+// ── Main render ───────────────────────────────────────────────────────────────
+function render(){
+  const root=document.getElementById("R");
+  root.innerHTML="";
+  if(S.showLogin)root.appendChild(buildLogin());
+  if(S.showCfg) root.appendChild(buildCfg());
+  if(S.preview) root.appendChild(buildPreview());
+
+  // Header
+  const hdr=h("div",{style:{padding:"20px 16px 12px",background:"linear-gradient(180deg,#0c0900,#080808)",borderBottom:"1px solid #141414"}});
+  const hrow=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}});
+  const hleft=h("div");
+  hleft.appendChild(h("div",{style:{fontSize:"9px",letterSpacing:".24em",color:"#8B6914",textTransform:"uppercase",marginBottom:"4px"}},["✦ Olfactory Journal ✦"]));
+  const h1=h("h1",{style:{fontSize:"22px",fontWeight:"400",background:"linear-gradient(135deg,#F0E6C8,#D4A843,#8B6914)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",letterSpacing:".05em",margin:"0"}});
+  h1.textContent="Perfume Vault";hleft.appendChild(h1);
+  const strow=h("div",{style:{display:"flex",alignItems:"center",gap:"6px",marginTop:"4px"}});
+  const dot=h("div",{style:{width:"7px",height:"7px",borderRadius:"50%",background:S.beOk===null?"#555":S.beOk?"#4CAF50":"#FF9800"}});
+  strow.appendChild(dot);
+  strow.appendChild(h("span",{style:{fontSize:"9px",color:S.beOk===null?"#555":S.beOk?"#4CAF50":"#FF9800"}},[`Backend ${S.beOk===null?"verificando...":S.beOk?"online":"offline"}`]));
+  hleft.appendChild(strow);
+  hleft.appendChild(h("div",{style:{fontSize:"10px",color:"#444",marginTop:"3px"}},[`${S.col.length} fragrâncias · ${S.wish.length} desejos`]));
+  const hright=h("div",{style:{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"6px"}});
+  if(S.user){
+    const urow=h("div",{style:{display:"flex",alignItems:"center",gap:"6px",cursor:"pointer"}});
+    urow.appendChild(h("div",{style:{width:"26px",height:"26px",borderRadius:"50%",background:"#D4A84322",border:"1px solid #D4A84444",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"11px",color:"#D4A843",fontWeight:"700"}},[(S.user.name||"U")[0]]));
+    urow.appendChild(h("span",{style:{fontSize:"10px",color:"#666"}},[(S.user.name||"").split(" ")[0]]));
+    urow.onclick=()=>{if(confirm("Sair?"))doLogout();};
+    hright.appendChild(urow);
+  }else{
+    const lb=h("button",{style:{background:"none",border:"1px solid #222",borderRadius:"8px",color:"#D4A843",padding:"5px 10px",cursor:"pointer",fontSize:"10px"}},["👤 Entrar"]);
+    lb.onclick=()=>set({showLogin:true});hright.appendChild(lb);
+  }
+  const brow=h("div",{style:{display:"flex",gap:"6px"}});
+  const sb=h("button",{style:{background:"none",border:"1px solid #1e1e1e",borderRadius:"8px",color:"#555",padding:"5px 10px",cursor:"pointer",fontSize:"10px"}},["⚙️"]);
+  sb.onclick=()=>set({showCfg:true});
+  const pb=h("button",{style:{background:"none",border:"1px solid #1e1e1e",borderRadius:"8px",color:"#555",padding:"5px 10px",cursor:"pointer",fontSize:"10px"}},["📄 PDF"]);
+  pb.onclick=exportPDF;
+  brow.appendChild(sb);brow.appendChild(pb);hright.appendChild(brow);
+  hrow.appendChild(hleft);hrow.appendChild(hright);hdr.appendChild(hrow);root.appendChild(hdr);
+
+  // Tabs
+  const tabs=h("div",{style:{display:"flex",borderBottom:"1px solid #141414",background:"#080808",position:"sticky",top:"0",zIndex:"10"}});
+  TABS.forEach((t,i)=>{const b=h("button",{class:"tab"+(S.tab===i?" on":"")});b.textContent=t;b.onclick=()=>set({tab:i});tabs.appendChild(b);});
+  root.appendChild(tabs);
+
+  if(S.err){
+    const eb=h("div",{class:"errbar"},["⚠ "+S.err]);
+    const xb=h("button",{style:{float:"right",background:"none",border:"none",color:"#666",cursor:"pointer",fontSize:"14px"}},["×"]);
+    xb.onclick=()=>set({err:""});eb.appendChild(xb);root.appendChild(eb);
+  }
+
+  const content=h("div",{style:{padding:"14px",paddingBottom:"50px"}});
+  if(S.tab===0)content.appendChild(tabCol());
+  if(S.tab===1)content.appendChild(tabWish());
+  if(S.tab===2)content.appendChild(tabProfile());
+  if(S.tab===3)content.appendChild(tabDisc());
+  root.appendChild(content);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+load();render();
+beHealth().then(ok=>set({beOk:ok}));
+setInterval(()=>beHealth().then(ok=>{if(ok!==S.beOk)set({beOk:ok});}),15000);
+
+// Login helper
+</body>
+</html>
